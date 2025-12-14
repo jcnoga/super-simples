@@ -13,6 +13,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Firebase SDKs (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; color: #1f2937; }
@@ -47,390 +51,710 @@
         /* Barra de Progresso */
         .progress-container { width: 100%; background-color: #e2e8f0; border-radius: 9999px; height: 14px; overflow: hidden; margin-top: 8px; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); }
         .progress-bar { height: 100%; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent); background-size: 1rem 1rem; }
+
+        /* Estilos de Autenticação */
+        #auth-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            z-index: 9999; display: flex; align-items: center; justify-content: center;
+        }
+        .auth-box { width: 100%; max-width: 400px; padding: 2rem; background: white; border-radius: 1rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+        .hidden { display: none !important; }
+        .pix-btn.selected { border-color: #2563eb; background-color: #eff6ff; color: #1e40af; }
     </style>
 </head>
 <body class="pb-16 text-gray-800" onclick="closeAllTooltips()">
 
-    <!-- Header -->
-    <header class="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 shadow-lg">
-        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center">
-            <div>
-                <h1 class="text-3xl font-bold tracking-tight"><i class="fas fa-chart-line mr-3 text-blue-400"></i>Simulador Estratégico</h1>
-                <p class="text-slate-300 text-sm mt-1">Análise Fiscal Inteligente para Varejo (Simples vs Presumido)</p>
+    <!-- TELA DE LOGIN / CADASTRO (Bloqueante) -->
+    <div id="auth-screen">
+        <div class="auth-box fade-in">
+            <div class="text-center mb-6">
+                <i class="fas fa-chart-line text-4xl text-blue-600 mb-2"></i>
+                <h2 class="text-2xl font-bold text-gray-800">Simulador Estratégico</h2>
+                <p class="text-sm text-gray-500">Faça login para acessar a ferramenta</p>
             </div>
-            <div class="mt-4 md:mt-0">
-                <span class="bg-blue-600 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Versão 2025</span>
-            </div>
-        </div>
-    </header>
 
-    <!-- Navegação -->
-    <div class="max-w-6xl mx-auto mt-8 px-4">
-        <div class="flex border-b border-gray-300 space-x-2 overflow-x-auto">
-            <button onclick="switchTab('calc')" id="btn-calc" class="tab-btn active whitespace-nowrap">
-                <i class="fas fa-calculator mr-2"></i> Simulador & Ponto de Equilíbrio
-            </button>
-            <button onclick="switchTab('extras')" id="btn-extras" class="tab-btn whitespace-nowrap">
-                <i class="fas fa-file-contract mr-2"></i> Obrigações & Relatório PDF
-            </button>
-        </div>
-    </div>
-
-    <!-- CONTEÚDO ABA 1: CALCULADORA -->
-    <div id="tab-calc" class="tab-content active max-w-6xl mx-auto mt-6 px-4">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            <!-- COLUNA 1: INPUTS -->
-            <div class="lg:col-span-1 space-y-6">
-                <!-- Faturamento -->
-                <div class="card p-6 border-l-4 border-blue-500">
-                    <h2 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b flex justify-between items-center">
-                        <span>1. Receita</span>
-                        <i class="fas fa-cash-register text-blue-200"></i>
-                    </h2>
+            <!-- Formulário de Login -->
+            <div id="login-form">
+                <div class="space-y-4">
+                    <div>
+                        <label class="input-label">E-mail</label>
+                        <input type="email" id="email-login" class="input-field" placeholder="seu@email.com">
+                    </div>
+                    <div>
+                        <label class="input-label">Senha</label>
+                        <input type="password" id="senha-login" class="input-field" placeholder="******">
+                        <div class="text-right mt-1">
+                            <button onclick="toggleAuthView('forgot')" class="text-xs text-blue-600 hover:underline">Esqueci minha senha</button>
+                        </div>
+                    </div>
+                    <button onclick="fazerLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded transition">
+                        Entrar
+                    </button>
                     
-                    <!-- Opção de Base de Cálculo -->
-                    <div class="mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                        <label class="input-label mb-2 text-blue-800">Calcular <strong>impostos</strong> sobre:</label>
-                        <div class="flex space-x-3">
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="radio" name="baseCalculo" value="real" checked onchange="calcular()" class="accent-blue-600 w-4 h-4">
-                                <span class="text-sm font-semibold">Valor Real</span>
-                            </label>
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="radio" name="baseCalculo" value="declarado" onchange="calcular()" class="accent-blue-600 w-4 h-4">
-                                <span class="text-sm font-semibold">Valor Declarado</span>
-                            </label>
-                        </div>
+                    <div class="relative flex py-2 items-center">
+                        <div class="flex-grow border-t border-gray-300"></div>
+                        <span class="flex-shrink mx-4 text-gray-400 text-xs">OU</span>
+                        <div class="flex-grow border-t border-gray-300"></div>
                     </div>
 
-                    <div class="mb-3 relative">
-                        <div class="flex items-center justify-between">
-                            <label class="input-label">Faturamento Mensal (Real)</label>
-                            <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-fat')"></i>
-                        </div>
-                        <div id="tip-fat" class="tooltip-content top-0 right-0 translate-x-full ml-2">
-                            O valor total bruto das vendas reais. Custos e lucros serão baseados neste valor.
-                        </div>
-                        <div class="relative">
-                            <span class="absolute left-3 top-2.5 text-gray-400">R$</span>
-                            <input type="number" id="faturamentoMensal" class="input-field pl-10" value="50000" oninput="syncFaturamento()">
-                        </div>
-                    </div>
-
-                    <!-- Novo Campo: Faturamento Declarado -->
-                    <div class="mb-5 relative">
-                        <div class="flex items-center justify-between">
-                            <label class="input-label text-blue-700">Faturamento Mensal Declarado</label>
-                            <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-fat-dec')"></i>
-                        </div>
-                        <div id="tip-fat-dec" class="tooltip-content top-0 right-0 translate-x-full ml-2">
-                            Valor para fins de nota fiscal. Se selecionada a opção acima, os impostos serão calculados sobre este valor.
-                        </div>
-                        <div class="relative">
-                            <span class="absolute left-3 top-2.5 text-gray-400">R$</span>
-                            <input type="number" id="faturamentoDeclarado" class="input-field pl-10 bg-blue-50 border-blue-200" value="50000" oninput="calcular()">
-                        </div>
-                    </div>
-
-                    <div class="mb-5 relative">
-                        <div class="flex items-center justify-between">
-                            <label class="input-label">RBT12 (Base de Cálculo)</label>
-                            <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-rbt')"></i>
-                        </div>
-                        <div id="tip-rbt" class="tooltip-content top-0 right-0 translate-x-full ml-2">
-                            Acumulado 12 meses. Se deixar vazio, será calculado automaticamente com base no faturamento escolhido para impostos.
-                        </div>
-                        <input type="number" id="rbt12" class="input-field" placeholder="Automático" oninput="calcular()">
-                    </div>
-
-                    <div class="mb-2 relative">
-                        <div class="flex items-center justify-between">
-                            <label class="input-label">Margem Bruta (%)</label>
-                            <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-margem')"></i>
-                        </div>
-                        <div id="tip-margem" class="tooltip-content top-0 right-0 translate-x-full ml-2">
-                            Quanto % sobra do preço de venda após tirar o custo do produto. Baseado no faturamento real.
-                        </div>
-                        <input type="number" id="margemBruta" class="input-field" value="40" oninput="calcular()">
-                    </div>
+                    <button onclick="googleLogin()" class="w-full border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-bold py-2 rounded transition flex items-center justify-center">
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5 mr-2" alt="Google">
+                        Entrar com Google
+                    </button>
                 </div>
-
-                <!-- Custos -->
-                <div class="card p-6 border-l-4 border-indigo-500">
-                    <h2 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b flex justify-between items-center">
-                        <span>2. Estrutura</span>
-                        <i class="fas fa-building text-indigo-200"></i>
-                    </h2>
-                    
-                    <div class="mb-5 relative">
-                        <div class="flex items-center justify-between">
-                            <label class="input-label">Despesas Fixas (R$)</label>
-                            <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-desp')"></i>
-                        </div>
-                        <div id="tip-desp" class="tooltip-content top-0 right-0 translate-x-full ml-2">
-                            Aluguel, luz, internet, contador, sistema. (NÃO coloque salários aqui).
-                        </div>
-                        <div class="relative">
-                            <span class="absolute left-3 top-2.5 text-gray-400">R$</span>
-                            <input type="number" id="despesasFixas" class="input-field pl-10" value="5000" oninput="calcular()">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="input-label">Funcionários</label>
-                            <input type="number" id="numFuncionarios" class="input-field" value="2" oninput="calcular()">
-                        </div>
-                        <div class="relative">
-                            <div class="flex items-center justify-between">
-                                <label class="input-label">Salário Médio</label>
-                                <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-sal')"></i>
-                            </div>
-                            <div id="tip-sal" class="tooltip-content top-0 left-0 -translate-x-full mr-2">
-                                Valor na carteira. O sistema adiciona automaticamente encargos (FGTS, Férias, etc).
-                            </div>
-                            <input type="number" id="salarioMedio" class="input-field" value="1800" oninput="calcular()">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Parâmetros Avançados -->
-                <div class="card p-6 border-l-4 border-slate-500 bg-slate-50">
-                    <div class="flex justify-between cursor-pointer" onclick="document.getElementById('advanced-opts').classList.toggle('hidden')">
-                        <h2 class="text-sm font-bold text-gray-600 uppercase tracking-wide">Ajustes Finos (Opcional)</h2>
-                        <i class="fas fa-chevron-down text-gray-400"></i>
-                    </div>
-                    <div id="advanced-opts" class="hidden mt-4">
-                        <div class="mb-3">
-                            <label class="input-label text-xs">ICMS Efetivo Presumido (%)</label>
-                            <input type="number" id="icmsPresumido" class="input-field text-sm" value="4" step="0.1" oninput="calcular()">
-                        </div>
-                        <div class="mb-3">
-                            <label class="input-label text-xs">INSS Patronal Presumido (%)</label>
-                            <input type="number" id="encargosPatronais" class="input-field text-sm" value="28" oninput="calcular()">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- COLUNA 2 E 3: RESULTADOS -->
-            <div class="lg:col-span-2 space-y-6">
-                
-                <!-- PONTO DE EQUILÍBRIO -->
-                <div class="card p-6 border-l-4 border-teal-500 bg-gradient-to-br from-white to-teal-50 shadow-md">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <h3 class="text-xl font-bold text-teal-900 flex items-center">
-                                <i class="fas fa-scale-balanced mr-2 text-teal-600"></i> Ponto de Equilíbrio
-                            </h3>
-                            <p class="text-sm text-teal-700">Quanto preciso vender para começar a lucrar?</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-xs text-gray-500 uppercase font-bold">Meta Mínima</p>
-                            <p class="text-2xl font-extrabold text-teal-700" id="valPontoEquilibrio">R$ 0,00</p>
-                        </div>
-                    </div>
-
-                    <div class="mt-2">
-                        <div class="flex justify-between text-xs font-semibold mb-1 text-gray-600">
-                            <span id="statusPE">Calculando saúde financeira...</span>
-                            <span id="percPE">0%</span>
-                        </div>
-                        <div class="progress-container">
-                            <div id="progressBarPE" class="progress-bar bg-teal-500" style="width: 0%"></div>
-                        </div>
-                        <div class="mt-2 text-xs text-gray-500 flex items-center">
-                            <i class="fas fa-info-circle mr-1"></i>
-                            <span>Considera seus custos fixos divididos pela margem de contribuição.</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Comparativo -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Simples -->
-                    <div class="card p-6 border-t-4 border-green-500 relative overflow-hidden">
-                        <div class="absolute top-0 right-0 -mt-2 -mr-2 bg-green-100 w-16 h-16 rounded-full opacity-50"></div>
-                        <h3 class="text-lg font-bold text-green-800 mb-3 relative z-10">Simples Nacional</h3>
-                        
-                        <div class="space-y-3 relative z-10">
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-600">Imposto (DAS)</span>
-                                <span class="result-value text-green-700" id="resSimplesImposto">R$ 0,00</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-600">Alíquota Real</span>
-                                <span class="text-xs font-bold bg-green-100 text-green-800 px-2 py-1 rounded-full" id="resSimplesAliq">0.00%</span>
-                            </div>
-                            <div class="pt-3 border-t border-green-100">
-                                <p class="text-xs text-gray-500 uppercase font-bold mb-1">Lucro Líquido Estimado</p>
-                                <div class="flex justify-between items-baseline">
-                                    <span class="text-2xl font-bold text-green-700" id="resSimplesLucro">R$ 0,00</span>
-                                    <span class="text-xs font-bold text-green-600" id="resSimplesMargem">0%</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Presumido -->
-                    <div class="card p-6 border-t-4 border-orange-500 relative overflow-hidden">
-                        <div class="absolute top-0 right-0 -mt-2 -mr-2 bg-orange-100 w-16 h-16 rounded-full opacity-50"></div>
-                        <h3 class="text-lg font-bold text-orange-800 mb-3 relative z-10">Lucro Presumido</h3>
-                        
-                        <div class="space-y-3 relative z-10">
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-600">Impostos Totais</span>
-                                <span class="result-value text-orange-700" id="resPresumidoImposto">R$ 0,00</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-600">Custo Extra (INSS)</span>
-                                <span class="text-xs font-bold bg-orange-100 text-orange-800 px-2 py-1 rounded-full" id="resPresumidoCPP">R$ 0,00</span>
-                            </div>
-                            <div class="pt-3 border-t border-orange-100">
-                                <p class="text-xs text-gray-500 uppercase font-bold mb-1">Lucro Líquido Estimado</p>
-                                <div class="flex justify-between items-baseline">
-                                    <span class="text-2xl font-bold text-orange-700" id="resPresumidoLucro">R$ 0,00</span>
-                                    <span class="text-xs font-bold text-orange-600" id="resPresumidoMargem">0%</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Gráfico e Recomendação -->
-                <div class="card p-6">
-                    <div id="recomendacaoBox" class="p-4 mb-6 rounded-lg text-center border-2 shadow-sm transition-all">
-                        <h3 class="text-2xl font-bold" id="recomendacaoTitulo">Analisando...</h3>
-                        <p id="recomendacaoTexto" class="mt-2">Insira os dados para obter uma recomendação.</p>
-                    </div>
-                    <div class="h-64 w-full">
-                        <canvas id="comparisonChart"></canvas>
-                    </div>
-                    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div class="bg-gray-50 p-4 rounded-lg border">
-                            <h4 class="font-bold text-gray-700 mb-2">Composição do Presumido</h4>
-                            <ul class="space-y-1 text-gray-600">
-                                <li class="flex justify-between"><span>PIS/COFINS:</span> <span id="detPisCofins">R$ 0</span></li>
-                                <li class="flex justify-between"><span>IRPJ/CSLL:</span> <span id="detIrCsll">R$ 0</span></li>
-                                <li class="flex justify-between"><span>ICMS (Est.):</span> <span id="detIcms">R$ 0</span></li>
-                                <li class="flex justify-between font-bold text-orange-600"><span>INSS Patronal:</span> <span id="detInssPatronal">R$ 0</span></li>
-                            </ul>
-                        </div>
-                        <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 flex flex-col justify-center">
-                            <p class="text-xs font-bold text-blue-800 uppercase mb-1">Análise de Futuro</p>
-                            <p class="text-sm text-gray-600">O Simples deixaria de valer a pena se você faturasse acima de:</p>
-                            <p class="text-2xl font-bold text-blue-700 mt-1" id="pontoViradaVal">...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- CONTEÚDO ABA 2: RELATÓRIO E OBRIGAÇÕES -->
-    <div id="tab-extras" class="tab-content max-w-6xl mx-auto mt-6 px-4">
-        
-        <div class="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-lg p-8 text-white shadow-lg mb-8 flex flex-col md:flex-row items-center justify-between">
-            <div class="mb-4 md:mb-0">
-                <h2 class="text-2xl font-bold mb-2">Baixe seu Relatório de Consultoria</h2>
-                <p class="text-blue-100 max-w-xl">
-                    Gere um PDF detalhado com os cálculos que você acabou de fazer, explicações didáticas e exemplos práticos para entender para onde vai o dinheiro.
+                <p class="text-center text-sm mt-6 text-gray-600">
+                    Não tem conta? <button onclick="toggleAuthView('register')" class="text-blue-600 font-bold hover:underline">Cadastre-se</button>
                 </p>
             </div>
-            <button onclick="gerarRelatorioDetalhado()" class="bg-white text-blue-600 hover:bg-blue-50 font-bold py-3 px-6 rounded-lg shadow-lg transition transform hover:scale-105 flex items-center">
-                <i class="fas fa-file-pdf mr-2 text-xl"></i> Baixar Relatório PDF
-            </button>
+
+            <!-- Formulário de Cadastro -->
+            <div id="register-form" class="hidden">
+                <div class="space-y-4">
+                    <div>
+                        <label class="input-label">Nome Completo</label>
+                        <input type="text" id="nome-cadastro" class="input-field" placeholder="Seu nome">
+                    </div>
+                    <div>
+                        <label class="input-label">E-mail</label>
+                        <input type="email" id="email-cadastro" class="input-field" placeholder="seu@email.com">
+                    </div>
+                    <div>
+                        <label class="input-label">Senha</label>
+                        <input type="password" id="senha-cadastro" class="input-field" placeholder="Crie uma senha forte">
+                    </div>
+                    <button onclick="fazerCadastro()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded transition">
+                        Criar Conta
+                    </button>
+                </div>
+                <p class="text-center text-sm mt-6 text-gray-600">
+                    Já tem conta? <button onclick="toggleAuthView('login')" class="text-blue-600 font-bold hover:underline">Faça Login</button>
+                </p>
+            </div>
+
+            <!-- Recuperação de Senha -->
+            <div id="forgot-form" class="hidden">
+                <div class="text-center mb-4">
+                    <p class="text-sm text-gray-600">Digite seu e-mail para receber um link de redefinição de senha.</p>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="input-label">E-mail cadastrado</label>
+                        <input type="email" id="email-recuperacao" class="input-field" placeholder="seu@email.com">
+                    </div>
+                    <button onclick="recuperarSenha()" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 rounded transition">
+                        Enviar Link
+                    </button>
+                </div>
+                <p class="text-center text-sm mt-6 text-gray-600">
+                    <button onclick="toggleAuthView('login')" class="text-gray-500 hover:text-gray-800 font-bold">Voltar ao Login</button>
+                </p>
+            </div>
+            
+            <div id="auth-msg" class="mt-4 text-center text-sm font-semibold hidden"></div>
+        </div>
+    </div>
+
+    <!-- CONTEÚDO DA APLICAÇÃO (Inicialmente Oculto) -->
+    <div id="app-content" class="hidden">
+        
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 shadow-lg">
+            <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold tracking-tight"><i class="fas fa-chart-line mr-3 text-blue-400"></i>Simulador Estratégico</h1>
+                    <p class="text-slate-300 text-sm mt-1">Análise Fiscal Inteligente para Varejo (Simples vs Presumido)</p>
+                </div>
+                <div class="mt-4 md:mt-0 flex items-center gap-4">
+                    <div class="text-right">
+                        <p class="text-xs text-slate-400">Logado como</p>
+                        <p class="font-bold text-sm" id="user-display-name">Usuário</p>
+                    </div>
+                    <button onclick="fazerLogout()" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition">
+                        <i class="fas fa-sign-out-alt"></i> Sair
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navegação -->
+        <div class="max-w-6xl mx-auto mt-8 px-4">
+            <div class="flex border-b border-gray-300 space-x-2 overflow-x-auto">
+                <button onclick="switchTab('calc')" id="btn-calc" class="tab-btn active whitespace-nowrap">
+                    <i class="fas fa-calculator mr-2"></i> Simulador & Ponto de Equilíbrio
+                </button>
+                <button onclick="switchTab('extras')" id="btn-extras" class="tab-btn whitespace-nowrap">
+                    <i class="fas fa-file-contract mr-2"></i> Obrigações & Relatório PDF
+                </button>
+            </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <!-- Coluna da Esquerda -->
-            <div class="space-y-6">
-                <div class="card p-6 border-l-4 border-red-500">
-                    <h3 class="font-bold text-lg text-gray-800 mb-3 flex items-center">
-                        <i class="fas fa-exclamation-circle text-red-500 mr-2"></i> Custo Trabalhista Real
-                    </h3>
-                    <p class="text-sm text-gray-600 mb-4">
-                        Muitos acham que funcionário custa só o salário. Veja o custo real estimado (sobre R$ 1.000 de salário):
-                    </p>
-                    <div class="bg-gray-50 rounded p-4 text-sm">
-                        <div class="flex justify-between border-b pb-2 mb-2 font-bold">
-                            <span>Item</span> <span>Custo Extra</span>
+        <!-- CONTEÚDO ABA 1: CALCULADORA -->
+        <div id="tab-calc" class="tab-content active max-w-6xl mx-auto mt-6 px-4">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                <!-- COLUNA 1: INPUTS -->
+                <div class="lg:col-span-1 space-y-6">
+                    <!-- Faturamento -->
+                    <div class="card p-6 border-l-4 border-blue-500">
+                        <h2 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b flex justify-between items-center">
+                            <span>1. Receita</span>
+                            <i class="fas fa-cash-register text-blue-200"></i>
+                        </h2>
+                        
+                        <!-- Opção de Base de Cálculo -->
+                        <div class="mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                            <label class="input-label mb-2 text-blue-800">Calcular <strong>impostos</strong> sobre:</label>
+                            <div class="flex space-x-3">
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="radio" name="baseCalculo" value="real" checked onchange="calcular()" class="accent-blue-600 w-4 h-4">
+                                    <span class="text-sm font-semibold">Valor Real</span>
+                                </label>
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="radio" name="baseCalculo" value="declarado" onchange="calcular()" class="accent-blue-600 w-4 h-4">
+                                    <span class="text-sm font-semibold">Valor Declarado</span>
+                                </label>
+                            </div>
                         </div>
-                        <div class="flex justify-between mb-1"><span>FGTS (8%)</span> <span>R$ 80,00</span></div>
-                        <div class="flex justify-between mb-1"><span>Férias + 1/3 (Provisão)</span> <span>R$ 111,11</span></div>
-                        <div class="flex justify-between mb-1"><span>13º Salário (Provisão)</span> <span>R$ 83,33</span></div>
-                        <div class="flex justify-between mb-1"><span>Multa FGTS (Provisão)</span> <span>R$ 40,00</span></div>
-                        <div class="border-t pt-2 mt-2 flex justify-between font-bold text-red-600">
-                            <span>Total Extra (+31.4%)</span> <span>+ R$ 314,44</span>
+
+                        <div class="mb-3 relative">
+                            <div class="flex items-center justify-between">
+                                <label class="input-label">Faturamento Mensal (Real)</label>
+                                <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-fat')"></i>
+                            </div>
+                            <div id="tip-fat" class="tooltip-content top-0 right-0 translate-x-full ml-2">
+                                O valor total bruto das vendas reais. Custos e lucros serão baseados neste valor.
+                            </div>
+                            <div class="relative">
+                                <span class="absolute left-3 top-2.5 text-gray-400">R$</span>
+                                <input type="number" id="faturamentoMensal" class="input-field pl-10" value="50000" oninput="syncFaturamento()">
+                            </div>
+                        </div>
+
+                        <!-- Novo Campo: Faturamento Declarado -->
+                        <div class="mb-5 relative">
+                            <div class="flex items-center justify-between">
+                                <label class="input-label text-blue-700">Faturamento Mensal Declarado</label>
+                                <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-fat-dec')"></i>
+                            </div>
+                            <div id="tip-fat-dec" class="tooltip-content top-0 right-0 translate-x-full ml-2">
+                                Valor para fins de nota fiscal. Se selecionada a opção acima, os impostos serão calculados sobre este valor.
+                            </div>
+                            <div class="relative">
+                                <span class="absolute left-3 top-2.5 text-gray-400">R$</span>
+                                <input type="number" id="faturamentoDeclarado" class="input-field pl-10 bg-blue-50 border-blue-200" value="50000" oninput="calcular()">
+                            </div>
+                        </div>
+
+                        <div class="mb-5 relative">
+                            <div class="flex items-center justify-between">
+                                <label class="input-label">RBT12 (Base de Cálculo)</label>
+                                <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-rbt')"></i>
+                            </div>
+                            <div id="tip-rbt" class="tooltip-content top-0 right-0 translate-x-full ml-2">
+                                Acumulado 12 meses. Se deixar vazio, será calculado automaticamente com base no faturamento escolhido para impostos.
+                            </div>
+                            <input type="number" id="rbt12" class="input-field" placeholder="Automático" oninput="calcular()">
+                        </div>
+
+                        <div class="mb-2 relative">
+                            <div class="flex items-center justify-between">
+                                <label class="input-label">Margem Bruta (%)</label>
+                                <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-margem')"></i>
+                            </div>
+                            <div id="tip-margem" class="tooltip-content top-0 right-0 translate-x-full ml-2">
+                                Quanto % sobra do preço de venda após tirar o custo do produto. Baseado no faturamento real.
+                            </div>
+                            <input type="number" id="margemBruta" class="input-field" value="40" oninput="calcular()">
+                        </div>
+                    </div>
+
+                    <!-- Custos -->
+                    <div class="card p-6 border-l-4 border-indigo-500">
+                        <h2 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b flex justify-between items-center">
+                            <span>2. Estrutura</span>
+                            <i class="fas fa-building text-indigo-200"></i>
+                        </h2>
+                        
+                        <div class="mb-5 relative">
+                            <div class="flex items-center justify-between">
+                                <label class="input-label">Despesas Fixas (R$)</label>
+                                <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-desp')"></i>
+                            </div>
+                            <div id="tip-desp" class="tooltip-content top-0 right-0 translate-x-full ml-2">
+                                Aluguel, luz, internet, contador, sistema. (NÃO coloque salários aqui).
+                            </div>
+                            <div class="relative">
+                                <span class="absolute left-3 top-2.5 text-gray-400">R$</span>
+                                <input type="number" id="despesasFixas" class="input-field pl-10" value="5000" oninput="calcular()">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="input-label">Funcionários</label>
+                                <input type="number" id="numFuncionarios" class="input-field" value="2" oninput="calcular()">
+                            </div>
+                            <div class="relative">
+                                <div class="flex items-center justify-between">
+                                    <label class="input-label">Salário Médio</label>
+                                    <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-sal')"></i>
+                                </div>
+                                <div id="tip-sal" class="tooltip-content top-0 left-0 -translate-x-full mr-2">
+                                    Valor na carteira. O sistema adiciona automaticamente encargos (FGTS, Férias, etc).
+                                </div>
+                                <input type="number" id="salarioMedio" class="input-field" value="1800" oninput="calcular()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Parâmetros Avançados -->
+                    <div class="card p-6 border-l-4 border-slate-500 bg-slate-50">
+                        <div class="flex justify-between cursor-pointer" onclick="document.getElementById('advanced-opts').classList.toggle('hidden')">
+                            <h2 class="text-sm font-bold text-gray-600 uppercase tracking-wide">Ajustes Finos (Opcional)</h2>
+                            <i class="fas fa-chevron-down text-gray-400"></i>
+                        </div>
+                        <div id="advanced-opts" class="hidden mt-4">
+                            <div class="mb-3">
+                                <label class="input-label text-xs">ICMS Efetivo Presumido (%)</label>
+                                <input type="number" id="icmsPresumido" class="input-field text-sm" value="4" step="0.1" oninput="calcular()">
+                            </div>
+                            <div class="mb-3">
+                                <label class="input-label text-xs">INSS Patronal Presumido (%)</label>
+                                <input type="number" id="encargosPatronais" class="input-field text-sm" value="28" oninput="calcular()">
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="card p-6 border-l-4 border-yellow-500">
-                    <h3 class="font-bold text-lg text-gray-800 mb-3 flex items-center">
-                        <i class="fas fa-truck text-yellow-500 mr-2"></i> Compras & ICMS
-                    </h3>
-                    <p class="text-sm text-gray-600 mb-3">
-                        Não está no DAS! Ao comprar mercadoria, cuidado com:
-                    </p>
-                    <ul class="space-y-2 text-sm">
-                        <li class="flex items-start">
-                            <i class="fas fa-chevron-right text-yellow-500 mt-1 mr-2"></i>
+                <!-- COLUNA 2 E 3: RESULTADOS -->
+                <div class="lg:col-span-2 space-y-6">
+                    
+                    <!-- PONTO DE EQUILÍBRIO -->
+                    <div class="card p-6 border-l-4 border-teal-500 bg-gradient-to-br from-white to-teal-50 shadow-md">
+                        <div class="flex justify-between items-start mb-4">
                             <div>
-                                <strong>ICMS-ST:</strong> O imposto já vem pago na nota de compra, mas encarece seu produto.
+                                <h3 class="text-xl font-bold text-teal-900 flex items-center">
+                                    <i class="fas fa-scale-balanced mr-2 text-teal-600"></i> Ponto de Equilíbrio
+                                </h3>
+                                <p class="text-sm text-teal-700">Quanto preciso vender para começar a lucrar?</p>
                             </div>
-                        </li>
-                        <li class="flex items-start">
-                            <i class="fas fa-chevron-right text-yellow-500 mt-1 mr-2"></i>
-                            <div>
-                                <strong>DIFAL:</strong> Se comprar de outro estado para uso (ex: computador, móveis), você paga a diferença de alíquota.
+                            <div class="text-right">
+                                <p class="text-xs text-gray-500 uppercase font-bold">Meta Mínima</p>
+                                <p class="text-2xl font-extrabold text-teal-700" id="valPontoEquilibrio">R$ 0,00</p>
                             </div>
-                        </li>
-                    </ul>
-                </div>
-            </div>
+                        </div>
 
-            <!-- Coluna da Direita -->
-            <div class="space-y-6">
-                <div class="card p-6 border-l-4 border-purple-500">
-                    <h3 class="font-bold text-lg text-gray-800 mb-3 flex items-center">
-                        <i class="fas fa-file-invoice-dollar text-purple-500 mr-2"></i> Taxas Anuais (Esquecidas)
-                    </h3>
-                    <ul class="divide-y divide-gray-100 text-sm">
-                        <li class="py-2 flex justify-between">
-                            <span><i class="far fa-file-alt mr-2 text-gray-400"></i> Alvará de Funcionamento</span>
-                            <span class="text-gray-500">Prefeitura</span>
-                        </li>
-                        <li class="py-2 flex justify-between">
-                            <span><i class="fas fa-fire-extinguisher mr-2 text-gray-400"></i> Taxa de Bombeiros</span>
-                            <span class="text-gray-500">Estadual</span>
-                        </li>
-                        <li class="py-2 flex justify-between">
-                            <span><i class="fas fa-id-card mr-2 text-gray-400"></i> Certificado Digital (e-CNPJ)</span>
-                            <span class="text-gray-500">Anual (~R$ 200)</span>
-                        </li>
-                        <li class="py-2 flex justify-between">
-                            <span><i class="fas fa-laptop-medical mr-2 text-gray-400"></i> Sistema de Gestão (ERP)</span>
-                            <span class="text-gray-500">Mensalidade</span>
-                        </li>
-                    </ul>
-                </div>
+                        <div class="mt-2">
+                            <div class="flex justify-between text-xs font-semibold mb-1 text-gray-600">
+                                <span id="statusPE">Calculando saúde financeira...</span>
+                                <span id="percPE">0%</span>
+                            </div>
+                            <div class="progress-container">
+                                <div id="progressBarPE" class="progress-bar bg-teal-500" style="width: 0%"></div>
+                            </div>
+                            <div class="mt-2 text-xs text-gray-500 flex items-center">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                <span>Considera seus custos fixos divididos pela margem de contribuição.</span>
+                            </div>
+                        </div>
+                    </div>
 
-                <div class="bg-slate-800 text-slate-200 p-6 rounded-lg shadow-inner">
-                    <h4 class="font-bold text-white mb-2"><i class="fas fa-lightbulb text-yellow-400 mr-2"></i> Dica de Ouro</h4>
-                    <p class="text-sm leading-relaxed">
-                        O Simples Nacional unifica 8 impostos em 1 guia (DAS), mas <strong>NÃO</strong> unifica as obrigações trabalhistas nem as taxas de funcionamento. 
-                        <br><br>
-                        Mantenha sempre uma reserva de caixa para o 13º dos funcionários e para a renovação do Alvará no começo do ano.
-                    </p>
+                    <!-- Comparativo -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Simples -->
+                        <div class="card p-6 border-t-4 border-green-500 relative overflow-hidden">
+                            <div class="absolute top-0 right-0 -mt-2 -mr-2 bg-green-100 w-16 h-16 rounded-full opacity-50"></div>
+                            <h3 class="text-lg font-bold text-green-800 mb-3 relative z-10">Simples Nacional</h3>
+                            
+                            <div class="space-y-3 relative z-10">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-600">Imposto (DAS)</span>
+                                    <span class="result-value text-green-700" id="resSimplesImposto">R$ 0,00</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-600">Alíquota Real</span>
+                                    <span class="text-xs font-bold bg-green-100 text-green-800 px-2 py-1 rounded-full" id="resSimplesAliq">0.00%</span>
+                                </div>
+                                <div class="pt-3 border-t border-green-100">
+                                    <p class="text-xs text-gray-500 uppercase font-bold mb-1">Lucro Líquido Estimado</p>
+                                    <div class="flex justify-between items-baseline">
+                                        <span class="text-2xl font-bold text-green-700" id="resSimplesLucro">R$ 0,00</span>
+                                        <span class="text-xs font-bold text-green-600" id="resSimplesMargem">0%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Presumido -->
+                        <div class="card p-6 border-t-4 border-orange-500 relative overflow-hidden">
+                            <div class="absolute top-0 right-0 -mt-2 -mr-2 bg-orange-100 w-16 h-16 rounded-full opacity-50"></div>
+                            <h3 class="text-lg font-bold text-orange-800 mb-3 relative z-10">Lucro Presumido</h3>
+                            
+                            <div class="space-y-3 relative z-10">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-600">Impostos Totais</span>
+                                    <span class="result-value text-orange-700" id="resPresumidoImposto">R$ 0,00</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-600">Custo Extra (INSS)</span>
+                                    <span class="text-xs font-bold bg-orange-100 text-orange-800 px-2 py-1 rounded-full" id="resPresumidoCPP">R$ 0,00</span>
+                                </div>
+                                <div class="pt-3 border-t border-orange-100">
+                                    <p class="text-xs text-gray-500 uppercase font-bold mb-1">Lucro Líquido Estimado</p>
+                                    <div class="flex justify-between items-baseline">
+                                        <span class="text-2xl font-bold text-orange-700" id="resPresumidoLucro">R$ 0,00</span>
+                                        <span class="text-xs font-bold text-orange-600" id="resPresumidoMargem">0%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gráfico e Recomendação -->
+                    <div class="card p-6">
+                        <div id="recomendacaoBox" class="p-4 mb-6 rounded-lg text-center border-2 shadow-sm transition-all">
+                            <h3 class="text-2xl font-bold" id="recomendacaoTitulo">Analisando...</h3>
+                            <p id="recomendacaoTexto" class="mt-2">Insira os dados para obter uma recomendação.</p>
+                        </div>
+                        <div class="h-64 w-full">
+                            <canvas id="comparisonChart"></canvas>
+                        </div>
+                        <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div class="bg-gray-50 p-4 rounded-lg border">
+                                <h4 class="font-bold text-gray-700 mb-2">Composição do Presumido</h4>
+                                <ul class="space-y-1 text-gray-600">
+                                    <li class="flex justify-between"><span>PIS/COFINS:</span> <span id="detPisCofins">R$ 0</span></li>
+                                    <li class="flex justify-between"><span>IRPJ/CSLL:</span> <span id="detIrCsll">R$ 0</span></li>
+                                    <li class="flex justify-between"><span>ICMS (Est.):</span> <span id="detIcms">R$ 0</span></li>
+                                    <li class="flex justify-between font-bold text-orange-600"><span>INSS Patronal:</span> <span id="detInssPatronal">R$ 0</span></li>
+                                </ul>
+                            </div>
+                            <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 flex flex-col justify-center">
+                                <p class="text-xs font-bold text-blue-800 uppercase mb-1">Análise de Futuro</p>
+                                <p class="text-sm text-gray-600">O Simples deixaria de valer a pena se você faturasse acima de:</p>
+                                <p class="text-2xl font-bold text-blue-700 mt-1" id="pontoViradaVal">...</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- CONTEÚDO ABA 2: RELATÓRIO E OBRIGAÇÕES -->
+        <div id="tab-extras" class="tab-content max-w-6xl mx-auto mt-6 px-4">
+            
+            <div class="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-lg p-8 text-white shadow-lg mb-8 flex flex-col md:flex-row items-center justify-between">
+                <div class="mb-4 md:mb-0">
+                    <h2 class="text-2xl font-bold mb-2">Baixe seu Relatório de Consultoria</h2>
+                    <p class="text-blue-100 max-w-xl">
+                        Gere um PDF detalhado com os cálculos que você acabou de fazer, explicações didáticas e exemplos práticos para entender para onde vai o dinheiro.
+                    </p>
+                </div>
+                <button onclick="gerarRelatorioDetalhado()" class="bg-white text-blue-600 hover:bg-blue-50 font-bold py-3 px-6 rounded-lg shadow-lg transition transform hover:scale-105 flex items-center">
+                    <i class="fas fa-file-pdf mr-2 text-xl"></i> Baixar Relatório PDF
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Coluna da Esquerda -->
+                <div class="space-y-6">
+                    <div class="card p-6 border-l-4 border-red-500">
+                        <h3 class="font-bold text-lg text-gray-800 mb-3 flex items-center">
+                            <i class="fas fa-exclamation-circle text-red-500 mr-2"></i> Custo Trabalhista Real
+                        </h3>
+                        <p class="text-sm text-gray-600 mb-4">
+                            Muitos acham que funcionário custa só o salário. Veja o custo real estimado (sobre R$ 1.000 de salário):
+                        </p>
+                        <div class="bg-gray-50 rounded p-4 text-sm">
+                            <div class="flex justify-between border-b pb-2 mb-2 font-bold">
+                                <span>Item</span> <span>Custo Extra</span>
+                            </div>
+                            <div class="flex justify-between mb-1"><span>FGTS (8%)</span> <span>R$ 80,00</span></div>
+                            <div class="flex justify-between mb-1"><span>Férias + 1/3 (Provisão)</span> <span>R$ 111,11</span></div>
+                            <div class="flex justify-between mb-1"><span>13º Salário (Provisão)</span> <span>R$ 83,33</span></div>
+                            <div class="flex justify-between mb-1"><span>Multa FGTS (Provisão)</span> <span>R$ 40,00</span></div>
+                            <div class="border-t pt-2 mt-2 flex justify-between font-bold text-red-600">
+                                <span>Total Extra (+31.4%)</span> <span>+ R$ 314,44</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card p-6 border-l-4 border-yellow-500">
+                        <h3 class="font-bold text-lg text-gray-800 mb-3 flex items-center">
+                            <i class="fas fa-truck text-yellow-500 mr-2"></i> Compras & ICMS
+                        </h3>
+                        <p class="text-sm text-gray-600 mb-3">
+                            Não está no DAS! Ao comprar mercadoria, cuidado com:
+                        </p>
+                        <ul class="space-y-2 text-sm">
+                            <li class="flex items-start">
+                                <i class="fas fa-chevron-right text-yellow-500 mt-1 mr-2"></i>
+                                <div>
+                                    <strong>ICMS-ST:</strong> O imposto já vem pago na nota de compra, mas encarece seu produto.
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-chevron-right text-yellow-500 mt-1 mr-2"></i>
+                                <div>
+                                    <strong>DIFAL:</strong> Se comprar de outro estado para uso (ex: computador, móveis), você paga a diferença de alíquota.
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Coluna da Direita -->
+                <div class="space-y-6">
+                    <div class="card p-6 border-l-4 border-purple-500">
+                        <h3 class="font-bold text-lg text-gray-800 mb-3 flex items-center">
+                            <i class="fas fa-file-invoice-dollar text-purple-500 mr-2"></i> Taxas Anuais (Esquecidas)
+                        </h3>
+                        <ul class="divide-y divide-gray-100 text-sm">
+                            <li class="py-2 flex justify-between">
+                                <span><i class="far fa-file-alt mr-2 text-gray-400"></i> Alvará de Funcionamento</span>
+                                <span class="text-gray-500">Prefeitura</span>
+                            </li>
+                            <li class="py-2 flex justify-between">
+                                <span><i class="fas fa-fire-extinguisher mr-2 text-gray-400"></i> Taxa de Bombeiros</span>
+                                <span class="text-gray-500">Estadual</span>
+                            </li>
+                            <li class="py-2 flex justify-between">
+                                <span><i class="fas fa-id-card mr-2 text-gray-400"></i> Certificado Digital (e-CNPJ)</span>
+                                <span class="text-gray-500">Anual (~R$ 200)</span>
+                            </li>
+                            <li class="py-2 flex justify-between">
+                                <span><i class="fas fa-laptop-medical mr-2 text-gray-400"></i> Sistema de Gestão (ERP)</span>
+                                <span class="text-gray-500">Mensalidade</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-slate-800 text-slate-200 p-6 rounded-lg shadow-inner">
+                        <h4 class="font-bold text-white mb-2"><i class="fas fa-lightbulb text-yellow-400 mr-2"></i> Dica de Ouro</h4>
+                        <p class="text-sm leading-relaxed">
+                            O Simples Nacional unifica 8 impostos em 1 guia (DAS), mas <strong>NÃO</strong> unifica as obrigações trabalhistas nem as taxas de funcionamento. 
+                            <br><br>
+                            Mantenha sempre uma reserva de caixa para o 13º dos funcionários e para a renovação do Alvará no começo do ano.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SESSÃO DE COLABORAÇÃO (DOAÇÃO) -->
+        <div class="max-w-6xl mx-auto mt-12 mb-12 px-4">
+            <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-8 text-center">
+                <h3 class="text-2xl font-bold text-gray-800 mb-2">
+                    <i class="fas fa-heart text-red-500 mr-2"></i> Apoie este Projeto
+                </h3>
+                <p class="text-gray-600 mb-6 max-w-2xl mx-auto">
+                    Esta ferramenta é mantida de forma independente. Se ela te ajudou a economizar ou planejar melhor, considere fazer uma contribuição voluntária para mantermos as atualizações.
+                </p>
+                
+                <div class="flex flex-col md:flex-row justify-center items-center gap-4 mb-6">
+                    <button onclick="selecionarValor(5)" class="pix-btn border-2 border-gray-200 rounded-lg py-3 px-6 hover:border-blue-500 hover:bg-blue-50 transition font-bold text-gray-700 w-full md:w-auto">
+                        R$ 5,00
+                    </button>
+                    <button onclick="selecionarValor(9)" class="pix-btn border-2 border-gray-200 rounded-lg py-3 px-6 hover:border-blue-500 hover:bg-blue-50 transition font-bold text-gray-700 w-full md:w-auto">
+                        R$ 9,00
+                    </button>
+                    <button onclick="selecionarValor(14)" class="pix-btn border-2 border-gray-200 rounded-lg py-3 px-6 hover:border-blue-500 hover:bg-blue-50 transition font-bold text-gray-700 w-full md:w-auto">
+                        R$ 14,00
+                    </button>
+                    <div class="relative w-full md:w-auto">
+                        <span class="absolute left-3 top-3 text-gray-500 text-sm">R$</span>
+                        <input type="number" id="valorPersonalizado" placeholder="Outro" class="border-2 border-gray-200 rounded-lg py-2.5 pl-8 pr-4 w-full md:w-32 focus:border-blue-500 focus:outline-none transition">
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-6 rounded-lg max-w-md mx-auto border border-slate-200">
+                    <p class="text-xs font-bold text-slate-500 uppercase mb-2">Chave PIX (Copia e Cola)</p>
+                    <div class="flex items-center bg-white border border-gray-300 rounded p-2 mb-3">
+                        <code id="pixKeyDisplay" class="text-xs text-gray-600 break-all flex-1 text-left mr-2">b4648948-d0a8-4402-81f4-8a4047fcf4e5</code>
+                        <button onclick="copiarPix()" class="text-blue-600 hover:text-blue-800">
+                            <i class="far fa-copy text-lg"></i>
+                        </button>
+                    </div>
+                    <button onclick="copiarPix()" id="btnCopiarPix" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 rounded transition flex items-center justify-center">
+                        <i class="fas fa-qrcode mr-2"></i> Copiar Chave
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
-        // ----- CÁLCULOS (Lógica Central) -----
+        // ----- CONFIGURAÇÃO FIREBASE (SUBSTITUA COM SEUS DADOS) -----
+const firebaseConfig = {
+  apiKey: "AIzaSyAY06PHLqEUCBzg9SjnH4N6xe9ZzM8OLvo",
+  authDomain: "projeto-bfed3.firebaseapp.com",
+  projectId: "projeto-bfed3",
+  storageBucket: "projeto-bfed3.firebasestorage.app",
+  messagingSenderId: "785289237066",
+  appId: "1:785289237066:web:c1a3565cef0491f0d5ccb3"
+};
+
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+        // ----- LÓGICA DE AUTENTICAÇÃO -----
+        
+        // Monitorar estado da autenticação
+        auth.onAuthStateChanged((user) => {
+            const authScreen = document.getElementById('auth-screen');
+            const appContent = document.getElementById('app-content');
+            
+            if (user) {
+                // Usuário logado
+                authScreen.classList.add('hidden');
+                appContent.classList.remove('hidden');
+                // Atualizar nome no header
+                const nome = user.displayName || user.email.split('@')[0];
+                document.getElementById('user-display-name').innerText = nome;
+                // Iniciar cálculos
+                calcular();
+            } else {
+                // Usuário deslogado
+                authScreen.classList.remove('hidden');
+                appContent.classList.add('hidden');
+            }
+        });
+
+        // Alternar visualização (Login/Cadastro/Recuperar)
+        function toggleAuthView(view) {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('register-form').classList.add('hidden');
+            document.getElementById('forgot-form').classList.add('hidden');
+            document.getElementById('auth-msg').classList.add('hidden');
+            
+            document.getElementById(view + '-form').classList.remove('hidden');
+        }
+
+        // Login com Email/Senha
+        function fazerLogin() {
+            const email = document.getElementById('email-login').value;
+            const pass = document.getElementById('senha-login').value;
+            const msgDiv = document.getElementById('auth-msg');
+
+            if (!email || !pass) {
+                showAuthError("Preencha todos os campos.");
+                return;
+            }
+
+            auth.signInWithEmailAndPassword(email, pass)
+                .catch((error) => {
+                    showAuthError(traduzirErroFirebase(error.code));
+                });
+        }
+
+        // Cadastro com Email/Senha + Nome
+        function fazerCadastro() {
+            const nome = document.getElementById('nome-cadastro').value;
+            const email = document.getElementById('email-cadastro').value;
+            const pass = document.getElementById('senha-cadastro').value;
+
+            if (!nome || !email || !pass) {
+                showAuthError("Preencha todos os campos.");
+                return;
+            }
+
+            auth.createUserWithEmailAndPassword(email, pass)
+                .then((userCredential) => {
+                    // Atualizar perfil com o nome
+                    return userCredential.user.updateProfile({
+                        displayName: nome
+                    });
+                })
+                .then(() => {
+                    // O onAuthStateChanged vai lidar com o resto
+                })
+                .catch((error) => {
+                    showAuthError(traduzirErroFirebase(error.code));
+                });
+        }
+
+        // Login Google
+        function googleLogin() {
+            auth.signInWithPopup(googleProvider)
+                .catch((error) => {
+                    showAuthError(traduzirErroFirebase(error.code));
+                });
+        }
+
+        // Recuperar Senha
+        function recuperarSenha() {
+            const email = document.getElementById('email-recuperacao').value;
+            const msgDiv = document.getElementById('auth-msg');
+
+            if (!email) {
+                showAuthError("Digite seu e-mail.");
+                return;
+            }
+
+            auth.sendPasswordResetEmail(email)
+                .then(() => {
+                    msgDiv.innerText = "Email de redefinição enviado! Verifique sua caixa de entrada.";
+                    msgDiv.className = "mt-4 text-center text-sm font-semibold text-green-600 block";
+                    setTimeout(() => toggleAuthView('login'), 3000);
+                })
+                .catch((error) => {
+                    showAuthError(traduzirErroFirebase(error.code));
+                });
+        }
+
+        function fazerLogout() {
+            auth.signOut();
+        }
+
+        function showAuthError(msg) {
+            const el = document.getElementById('auth-msg');
+            el.innerText = msg;
+            el.className = "mt-4 text-center text-sm font-semibold text-red-600 block";
+        }
+
+        function traduzirErroFirebase(code) {
+            switch (code) {
+                case 'auth/email-already-in-use': return 'Este e-mail já está em uso.';
+                case 'auth/invalid-email': return 'E-mail inválido.';
+                case 'auth/weak-password': return 'A senha deve ter pelo menos 6 caracteres.';
+                case 'auth/user-not-found': return 'Usuário não encontrado.';
+                case 'auth/wrong-password': return 'Senha incorreta.';
+                default: return 'Ocorreu um erro: ' + code;
+            }
+        }
+
+        // ----- LÓGICA DE DOAÇÃO -----
+        function selecionarValor(val) {
+            // Remove seleção anterior
+            document.querySelectorAll('.pix-btn').forEach(b => b.classList.remove('selected'));
+            document.getElementById('valorPersonalizado').value = '';
+            
+            // Adiciona visual de seleção (apenas visual, pois a chave é fixa)
+            event.currentTarget.classList.add('selected');
+        }
+
+        function copiarPix() {
+            const key = "b4648948-d0a8-4402-81f4-8a4047fcf4e5";
+            navigator.clipboard.writeText(key).then(() => {
+                const btn = document.getElementById('btnCopiarPix');
+                const originalText = btn.innerHTML;
+                
+                btn.className = "w-full bg-green-600 text-white font-bold py-2 rounded transition flex items-center justify-center";
+                btn.innerHTML = '<i class="fas fa-check mr-2"></i> Copiado!';
+                
+                setTimeout(() => {
+                    btn.className = "w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 rounded transition flex items-center justify-center";
+                    btn.innerHTML = originalText;
+                }, 2000);
+            });
+        }
+
+        // ----- CÁLCULOS (Lógica Central - Mantida Integralmente) -----
         const anexoI = [
             { limite: 180000, aliq: 0.04, deducao: 0 },
             { limite: 360000, aliq: 0.073, deducao: 5940 },
@@ -764,7 +1088,9 @@
         }
         function closeAllTooltips() { document.querySelectorAll('.tooltip-content').forEach(t => t.style.display = 'none'); }
 
-        window.onload = calcular;
+        // Inicialização: Se tiver usuário logado cacheado, o Firebase chamará o onAuthStateChanged.
+        // Se não, o Auth Screen já começa visível.
+        // O window.onload original foi removido pois a inicialização depende do Auth.
     </script>
 </body>
 </html>
