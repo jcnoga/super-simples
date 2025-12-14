@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador Estratégico + Relatório Detalhado</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; color: #1f2937; }
+        .card { background: white; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); transition: transform 0.2s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        
+        .input-label { font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 4px; display: block; }
+        .input-field { width: 100%; padding: 0.6rem; border: 1px solid #d1d5db; border-radius: 0.5rem; transition: all 0.2s; }
+        .input-field:focus { outline: none; border-color: #2563eb; ring: 2px; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        
+        .result-value { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.025em; }
+
+        /* Tooltip Moderno */
+        .tooltip-btn { cursor: pointer; color: #3b82f6; margin-left: 6px; transition: color 0.2s; }
+        .tooltip-btn:hover { color: #1d4ed8; }
+        .tooltip-content { 
+            display: none; position: absolute; background-color: #1e293b; color: #f8fafc; 
+            padding: 12px; border-radius: 8px; font-size: 0.85rem; width: 280px; z-index: 50; 
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            line-height: 1.5; border: 1px solid #334155;
+        }
+        .tooltip-wrapper { position: relative; display: inline-block; }
+        
+        /* Abas */
+        .tab-btn { padding: 12px 24px; font-weight: 600; border-bottom: 3px solid transparent; color: #6b7280; transition: all 0.3s; background: transparent; }
+        .tab-btn:hover { color: #1d4ed8; background-color: rgba(239, 246, 255, 0.5); }
+        .tab-btn.active { color: #1e40af; border-bottom-color: #1e40af; background-color: #eff6ff; border-radius: 8px 8px 0 0; }
+        .tab-content { display: none; animation: fadeIn 0.4s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Barra de Progresso */
+        .progress-container { width: 100%; background-color: #e2e8f0; border-radius: 9999px; height: 14px; overflow: hidden; margin-top: 8px; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); }
+        .progress-bar { height: 100%; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent); background-size: 1rem 1rem; }
+    </style>
+</head>
+<body class="pb-16 text-gray-800" onclick="closeAllTooltips()">
+
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 shadow-lg">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight"><i class="fas fa-chart-line mr-3 text-blue-400"></i>Simulador Estratégico</h1>
+                <p class="text-slate-300 text-sm mt-1">Análise Fiscal Inteligente para Varejo (Simples vs Presumido)</p>
+            </div>
+            <div class="mt-4 md:mt-0">
+                <span class="bg-blue-600 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Versão 2025</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navegação -->
+    <div class="max-w-6xl mx-auto mt-8 px-4">
+        <div class="flex border-b border-gray-300 space-x-2 overflow-x-auto">
+            <button onclick="switchTab('calc')" id="btn-calc" class="tab-btn active whitespace-nowrap">
+                <i class="fas fa-calculator mr-2"></i> Simulador & Ponto de Equilíbrio
+            </button>
+            <button onclick="switchTab('extras')" id="btn-extras" class="tab-btn whitespace-nowrap">
+                <i class="fas fa-file-contract mr-2"></i> Obrigações & Relatório PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- CONTEÚDO ABA 1: CALCULADORA -->
+    <div id="tab-calc" class="tab-content active max-w-6xl mx-auto mt-6 px-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- COLUNA 1: INPUTS -->
+            <div class="lg:col-span-1 space-y-6">
+                <!-- Faturamento -->
+                <div class="card p-6 border-l-4 border-blue-500">
+                    <h2 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b flex justify-between items-center">
+                        <span>1. Receita</span>
+                        <i class="fas fa-cash-register text-blue-200"></i>
+                    </h2>
+                    
+                    <!-- Opção de Base de Cálculo -->
+                    <div class="mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                        <label class="input-label mb-2 text-blue-800">Calcular <strong>impostos</strong> sobre:</label>
+                        <div class="flex space-x-3">
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" name="baseCalculo" value="real" checked onchange="calcular()" class="accent-blue-600 w-4 h-4">
+                                <span class="text-sm font-semibold">Valor Real</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" name="baseCalculo" value="declarado" onchange="calcular()" class="accent-blue-600 w-4 h-4">
+                                <span class="text-sm font-semibold">Valor Declarado</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 relative">
+                        <div class="flex items-center justify-between">
+                            <label class="input-label">Faturamento Mensal (Real)</label>
+                            <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-fat')"></i>
+                        </div>
+                        <div id="tip-fat" class="tooltip-content top-0 right-0 translate-x-full ml-2">
+                            O valor total bruto das vendas reais. Custos e lucros serão baseados neste valor.
+                        </div>
+                        <div class="relative">
+                            <span class="absolute left-3 top-2.5 text-gray-400">R$</span>
+                            <input type="number" id="faturamentoMensal" class="input-field pl-10" value="50000" oninput="syncFaturamento()">
+                        </div>
+                    </div>
+
+                    <!-- Novo Campo: Faturamento Declarado -->
+                    <div class="mb-5 relative">
+                        <div class="flex items-center justify-between">
+                            <label class="input-label text-blue-700">Faturamento Mensal Declarado</label>
+                            <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-fat-dec')"></i>
+                        </div>
+                        <div id="tip-fat-dec" class="tooltip-content top-0 right-0 translate-x-full ml-2">
+                            Valor para fins de nota fiscal. Se selecionada a opção acima, os impostos serão calculados sobre este valor.
+                        </div>
+                        <div class="relative">
+                            <span class="absolute left-3 top-2.5 text-gray-400">R$</span>
+                            <input type="number" id="faturamentoDeclarado" class="input-field pl-10 bg-blue-50 border-blue-200" value="50000" oninput="calcular()">
+                        </div>
+                    </div>
+
+                    <div class="mb-5 relative">
+                        <div class="flex items-center justify-between">
+                            <label class="input-label">RBT12 (Base de Cálculo)</label>
+                            <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-rbt')"></i>
+                        </div>
+                        <div id="tip-rbt" class="tooltip-content top-0 right-0 translate-x-full ml-2">
+                            Acumulado 12 meses. Se deixar vazio, será calculado automaticamente com base no faturamento escolhido para impostos.
+                        </div>
+                        <input type="number" id="rbt12" class="input-field" placeholder="Automático" oninput="calcular()">
+                    </div>
+
+                    <div class="mb-2 relative">
+                        <div class="flex items-center justify-between">
+                            <label class="input-label">Margem Bruta (%)</label>
+                            <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-margem')"></i>
+                        </div>
+                        <div id="tip-margem" class="tooltip-content top-0 right-0 translate-x-full ml-2">
+                            Quanto % sobra do preço de venda após tirar o custo do produto. Baseado no faturamento real.
+                        </div>
+                        <input type="number" id="margemBruta" class="input-field" value="40" oninput="calcular()">
+                    </div>
+                </div>
+
+                <!-- Custos -->
+                <div class="card p-6 border-l-4 border-indigo-500">
+                    <h2 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b flex justify-between items-center">
+                        <span>2. Estrutura</span>
+                        <i class="fas fa-building text-indigo-200"></i>
+                    </h2>
+                    
+                    <div class="mb-5 relative">
+                        <div class="flex items-center justify-between">
+                            <label class="input-label">Despesas Fixas (R$)</label>
+                            <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-desp')"></i>
+                        </div>
+                        <div id="tip-desp" class="tooltip-content top-0 right-0 translate-x-full ml-2">
+                            Aluguel, luz, internet, contador, sistema. (NÃO coloque salários aqui).
+                        </div>
+                        <div class="relative">
+                            <span class="absolute left-3 top-2.5 text-gray-400">R$</span>
+                            <input type="number" id="despesasFixas" class="input-field pl-10" value="5000" oninput="calcular()">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="input-label">Funcionários</label>
+                            <input type="number" id="numFuncionarios" class="input-field" value="2" oninput="calcular()">
+                        </div>
+                        <div class="relative">
+                            <div class="flex items-center justify-between">
+                                <label class="input-label">Salário Médio</label>
+                                <i class="fas fa-circle-info tooltip-btn" onclick="toggleTooltip(event, 'tip-sal')"></i>
+                            </div>
+                            <div id="tip-sal" class="tooltip-content top-0 left-0 -translate-x-full mr-2">
+                                Valor na carteira. O sistema adiciona automaticamente encargos (FGTS, Férias, etc).
+                            </div>
+                            <input type="number" id="salarioMedio" class="input-field" value="1800" oninput="calcular()">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parâmetros Avançados -->
+                <div class="card p-6 border-l-4 border-slate-500 bg-slate-50">
+                    <div class="flex justify-between cursor-pointer" onclick="document.getElementById('advanced-opts').classList.toggle('hidden')">
+                        <h2 class="text-sm font-bold text-gray-600 uppercase tracking-wide">Ajustes Finos (Opcional)</h2>
+                        <i class="fas fa-chevron-down text-gray-400"></i>
+                    </div>
+                    <div id="advanced-opts" class="hidden mt-4">
+                        <div class="mb-3">
+                            <label class="input-label text-xs">ICMS Efetivo Presumido (%)</label>
+                            <input type="number" id="icmsPresumido" class="input-field text-sm" value="4" step="0.1" oninput="calcular()">
+                        </div>
+                        <div class="mb-3">
+                            <label class="input-label text-xs">INSS Patronal Presumido (%)</label>
+                            <input type="number" id="encargosPatronais" class="input-field text-sm" value="28" oninput="calcular()">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COLUNA 2 E 3: RESULTADOS -->
+            <div class="lg:col-span-2 space-y-6">
+                
+                <!-- PONTO DE EQUILÍBRIO -->
+                <div class="card p-6 border-l-4 border-teal-500 bg-gradient-to-br from-white to-teal-50 shadow-md">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="text-xl font-bold text-teal-900 flex items-center">
+                                <i class="fas fa-scale-balanced mr-2 text-teal-600"></i> Ponto de Equilíbrio
+                            </h3>
+                            <p class="text-sm text-teal-700">Quanto preciso vender para começar a lucrar?</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-gray-500 uppercase font-bold">Meta Mínima</p>
+                            <p class="text-2xl font-extrabold text-teal-700" id="valPontoEquilibrio">R$ 0,00</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        <div class="flex justify-between text-xs font-semibold mb-1 text-gray-600">
+                            <span id="statusPE">Calculando saúde financeira...</span>
+                            <span id="percPE">0%</span>
+                        </div>
+                        <div class="progress-container">
+                            <div id="progressBarPE" class="progress-bar bg-teal-500" style="width: 0%"></div>
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500 flex items-center">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            <span>Considera seus custos fixos divididos pela margem de contribuição.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comparativo -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Simples -->
+                    <div class="card p-6 border-t-4 border-green-500 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 -mt-2 -mr-2 bg-green-100 w-16 h-16 rounded-full opacity-50"></div>
+                        <h3 class="text-lg font-bold text-green-800 mb-3 relative z-10">Simples Nacional</h3>
+                        
+                        <div class="space-y-3 relative z-10">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">Imposto (DAS)</span>
+                                <span class="result-value text-green-700" id="resSimplesImposto">R$ 0,00</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">Alíquota Real</span>
+                                <span class="text-xs font-bold bg-green-100 text-green-800 px-2 py-1 rounded-full" id="resSimplesAliq">0.00%</span>
+                            </div>
+                            <div class="pt-3 border-t border-green-100">
+                                <p class="text-xs text-gray-500 uppercase font-bold mb-1">Lucro Líquido Estimado</p>
+                                <div class="flex justify-between items-baseline">
+                                    <span class="text-2xl font-bold text-green-700" id="resSimplesLucro">R$ 0,00</span>
+                                    <span class="text-xs font-bold text-green-600" id="resSimplesMargem">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Presumido -->
+                    <div class="card p-6 border-t-4 border-orange-500 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 -mt-2 -mr-2 bg-orange-100 w-16 h-16 rounded-full opacity-50"></div>
+                        <h3 class="text-lg font-bold text-orange-800 mb-3 relative z-10">Lucro Presumido</h3>
+                        
+                        <div class="space-y-3 relative z-10">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">Impostos Totais</span>
+                                <span class="result-value text-orange-700" id="resPresumidoImposto">R$ 0,00</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">Custo Extra (INSS)</span>
+                                <span class="text-xs font-bold bg-orange-100 text-orange-800 px-2 py-1 rounded-full" id="resPresumidoCPP">R$ 0,00</span>
+                            </div>
+                            <div class="pt-3 border-t border-orange-100">
+                                <p class="text-xs text-gray-500 uppercase font-bold mb-1">Lucro Líquido Estimado</p>
+                                <div class="flex justify-between items-baseline">
+                                    <span class="text-2xl font-bold text-orange-700" id="resPresumidoLucro">R$ 0,00</span>
+                                    <span class="text-xs font-bold text-orange-600" id="resPresumidoMargem">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gráfico e Recomendação -->
+                <div class="card p-6">
+                    <div id="recomendacaoBox" class="p-4 mb-6 rounded-lg text-center border-2 shadow-sm transition-all">
+                        <h3 class="text-2xl font-bold" id="recomendacaoTitulo">Analisando...</h3>
+                        <p id="recomendacaoTexto" class="mt-2">Insira os dados para obter uma recomendação.</p>
+                    </div>
+                    <div class="h-64 w-full">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div class="bg-gray-50 p-4 rounded-lg border">
+                            <h4 class="font-bold text-gray-700 mb-2">Composição do Presumido</h4>
+                            <ul class="space-y-1 text-gray-600">
+                                <li class="flex justify-between"><span>PIS/COFINS:</span> <span id="detPisCofins">R$ 0</span></li>
+                                <li class="flex justify-between"><span>IRPJ/CSLL:</span> <span id="detIrCsll">R$ 0</span></li>
+                                <li class="flex justify-between"><span>ICMS (Est.):</span> <span id="detIcms">R$ 0</span></li>
+                                <li class="flex justify-between font-bold text-orange-600"><span>INSS Patronal:</span> <span id="detInssPatronal">R$ 0</span></li>
+                            </ul>
+                        </div>
+                        <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 flex flex-col justify-center">
+                            <p class="text-xs font-bold text-blue-800 uppercase mb-1">Análise de Futuro</p>
+                            <p class="text-sm text-gray-600">O Simples deixaria de valer a pena se você faturasse acima de:</p>
+                            <p class="text-2xl font-bold text-blue-700 mt-1" id="pontoViradaVal">...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTEÚDO ABA 2: RELATÓRIO E OBRIGAÇÕES -->
+    <div id="tab-extras" class="tab-content max-w-6xl mx-auto mt-6 px-4">
+        
+        <div class="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-lg p-8 text-white shadow-lg mb-8 flex flex-col md:flex-row items-center justify-between">
+            <div class="mb-4 md:mb-0">
+                <h2 class="text-2xl font-bold mb-2">Baixe seu Relatório de Consultoria</h2>
+                <p class="text-blue-100 max-w-xl">
+                    Gere um PDF detalhado com os cálculos que você acabou de fazer, explicações didáticas e exemplos práticos para entender para onde vai o dinheiro.
+                </p>
+            </div>
+            <button onclick="gerarRelatorioDetalhado()" class="bg-white text-blue-600 hover:bg-blue-50 font-bold py-3 px-6 rounded-lg shadow-lg transition transform hover:scale-105 flex items-center">
+                <i class="fas fa-file-pdf mr-2 text-xl"></i> Baixar Relatório PDF
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Coluna da Esquerda -->
+            <div class="space-y-6">
+                <div class="card p-6 border-l-4 border-red-500">
+                    <h3 class="font-bold text-lg text-gray-800 mb-3 flex items-center">
+                        <i class="fas fa-exclamation-circle text-red-500 mr-2"></i> Custo Trabalhista Real
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">
+                        Muitos acham que funcionário custa só o salário. Veja o custo real estimado (sobre R$ 1.000 de salário):
+                    </p>
+                    <div class="bg-gray-50 rounded p-4 text-sm">
+                        <div class="flex justify-between border-b pb-2 mb-2 font-bold">
+                            <span>Item</span> <span>Custo Extra</span>
+                        </div>
+                        <div class="flex justify-between mb-1"><span>FGTS (8%)</span> <span>R$ 80,00</span></div>
+                        <div class="flex justify-between mb-1"><span>Férias + 1/3 (Provisão)</span> <span>R$ 111,11</span></div>
+                        <div class="flex justify-between mb-1"><span>13º Salário (Provisão)</span> <span>R$ 83,33</span></div>
+                        <div class="flex justify-between mb-1"><span>Multa FGTS (Provisão)</span> <span>R$ 40,00</span></div>
+                        <div class="border-t pt-2 mt-2 flex justify-between font-bold text-red-600">
+                            <span>Total Extra (+31.4%)</span> <span>+ R$ 314,44</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card p-6 border-l-4 border-yellow-500">
+                    <h3 class="font-bold text-lg text-gray-800 mb-3 flex items-center">
+                        <i class="fas fa-truck text-yellow-500 mr-2"></i> Compras & ICMS
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-3">
+                        Não está no DAS! Ao comprar mercadoria, cuidado com:
+                    </p>
+                    <ul class="space-y-2 text-sm">
+                        <li class="flex items-start">
+                            <i class="fas fa-chevron-right text-yellow-500 mt-1 mr-2"></i>
+                            <div>
+                                <strong>ICMS-ST:</strong> O imposto já vem pago na nota de compra, mas encarece seu produto.
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-chevron-right text-yellow-500 mt-1 mr-2"></i>
+                            <div>
+                                <strong>DIFAL:</strong> Se comprar de outro estado para uso (ex: computador, móveis), você paga a diferença de alíquota.
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Coluna da Direita -->
+            <div class="space-y-6">
+                <div class="card p-6 border-l-4 border-purple-500">
+                    <h3 class="font-bold text-lg text-gray-800 mb-3 flex items-center">
+                        <i class="fas fa-file-invoice-dollar text-purple-500 mr-2"></i> Taxas Anuais (Esquecidas)
+                    </h3>
+                    <ul class="divide-y divide-gray-100 text-sm">
+                        <li class="py-2 flex justify-between">
+                            <span><i class="far fa-file-alt mr-2 text-gray-400"></i> Alvará de Funcionamento</span>
+                            <span class="text-gray-500">Prefeitura</span>
+                        </li>
+                        <li class="py-2 flex justify-between">
+                            <span><i class="fas fa-fire-extinguisher mr-2 text-gray-400"></i> Taxa de Bombeiros</span>
+                            <span class="text-gray-500">Estadual</span>
+                        </li>
+                        <li class="py-2 flex justify-between">
+                            <span><i class="fas fa-id-card mr-2 text-gray-400"></i> Certificado Digital (e-CNPJ)</span>
+                            <span class="text-gray-500">Anual (~R$ 200)</span>
+                        </li>
+                        <li class="py-2 flex justify-between">
+                            <span><i class="fas fa-laptop-medical mr-2 text-gray-400"></i> Sistema de Gestão (ERP)</span>
+                            <span class="text-gray-500">Mensalidade</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="bg-slate-800 text-slate-200 p-6 rounded-lg shadow-inner">
+                    <h4 class="font-bold text-white mb-2"><i class="fas fa-lightbulb text-yellow-400 mr-2"></i> Dica de Ouro</h4>
+                    <p class="text-sm leading-relaxed">
+                        O Simples Nacional unifica 8 impostos em 1 guia (DAS), mas <strong>NÃO</strong> unifica as obrigações trabalhistas nem as taxas de funcionamento. 
+                        <br><br>
+                        Mantenha sempre uma reserva de caixa para o 13º dos funcionários e para a renovação do Alvará no começo do ano.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ----- CÁLCULOS (Lógica Central) -----
+        const anexoI = [
+            { limite: 180000, aliq: 0.04, deducao: 0 },
+            { limite: 360000, aliq: 0.073, deducao: 5940 },
+            { limite: 720000, aliq: 0.095, deducao: 13860 },
+            { limite: 1800000, aliq: 0.107, deducao: 22500 },
+            { limite: 3600000, aliq: 0.143, deducao: 87300 },
+            { limite: 4800000, aliq: 0.19, deducao: 378000 }
+        ];
+
+        function formatCurrency(value) { return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+        function getSimplesTax(rbt12, faturamentoMensal) {
+            let faixa = anexoI.find(f => rbt12 <= f.limite) || anexoI[anexoI.length - 1];
+            let aliq = ((rbt12 * faixa.aliq) - faixa.deducao) / rbt12;
+            if (aliq < 0.04 && rbt12 <= 180000) aliq = 0.04;
+            return { valor: faturamentoMensal * aliq, aliquota: aliq };
+        }
+
+        let chartInstance = null;
+
+        // Função para sincronizar o Faturamento Declarado com o Real
+        function syncFaturamento() {
+            let real = document.getElementById('faturamentoMensal').value;
+            // Sugere automaticamente copiando o valor
+            document.getElementById('faturamentoDeclarado').value = real;
+            calcular();
+        }
+
+        function calcular() {
+            // Obter Inputs
+            let fatRealInput = parseFloat(document.getElementById('faturamentoMensal').value) || 0;
+            let fatDeclInput = parseFloat(document.getElementById('faturamentoDeclarado').value) || 0;
+            
+            // Decidir qual faturamento usar para os IMPOSTOS
+            let modoCalculo = document.querySelector('input[name="baseCalculo"]:checked').value;
+            // fatReal = sempre usado para custos e margens reais
+            let fatReal = fatRealInput;
+            // fatFiscal = usado apenas para cálculo de tributos
+            let fatFiscal = (modoCalculo === 'real') ? fatRealInput : fatDeclInput;
+
+            let rbt12Input = document.getElementById('rbt12').value;
+            // RBT12 deve seguir a lógica fiscal (acumulado do que foi declarado)
+            let rbt12 = rbt12Input ? parseFloat(rbt12Input) : fatFiscal * 12;
+            
+            let margemBrutaPct = parseFloat(document.getElementById('margemBruta').value) || 0;
+            let despFixas = parseFloat(document.getElementById('despesasFixas').value) || 0;
+            let numFunc = parseFloat(document.getElementById('numFuncionarios').value) || 0;
+            let salario = parseFloat(document.getElementById('salarioMedio').value) || 0;
+            let icmsPresumidoAliq = (parseFloat(document.getElementById('icmsPresumido').value) || 0) / 100;
+            let patronalAliq = (parseFloat(document.getElementById('encargosPatronais').value) || 0) / 100;
+
+            // Custos (Baseados na realidade)
+            // Custo da mercadoria é sobre o que saiu de verdade
+            let cmv = fatReal * (1 - (margemBrutaPct / 100)); 
+            let provisoes = 0.33; 
+            let custoFolhaBase = (numFunc * salario) * (1 + provisoes);
+            let custoFolhaBruta = numFunc * salario;
+
+            // SIMPLES (Calculado sobre base Fiscal)
+            let dadosSimples = getSimplesTax(rbt12, fatFiscal);
+            let impostoSimples = dadosSimples.valor;
+            // Lucro Real = Faturamento Real - Custos Reais - Imposto (calculado sobre o fiscal)
+            let lucroSimples = fatReal - cmv - despFixas - custoFolhaBase - impostoSimples;
+            let margemSimples = fatReal > 0 ? (lucroSimples / fatReal) * 100 : 0;
+
+            // PRESUMIDO (Calculado sobre base Fiscal)
+            let pisCofins = fatFiscal * 0.0365;
+            let irpj = (fatFiscal * 0.08 * 0.15) + (fatFiscal * 0.08 > 20000 ? (fatFiscal * 0.08 - 20000) * 0.10 : 0);
+            let csll = (fatFiscal * 0.12 * 0.09);
+            let icms = fatFiscal * icmsPresumidoAliq;
+            let totalImpostosPresumido = pisCofins + irpj + csll + icms;
+            let custoPatronal = custoFolhaBruta * patronalAliq;
+            // Lucro Real
+            let lucroPresumido = fatReal - cmv - despFixas - custoFolhaBase - custoPatronal - totalImpostosPresumido;
+            let margemPresumido = fatReal > 0 ? (lucroPresumido / fatReal) * 100 : 0;
+
+            // PONTO DE EQUILÍBRIO (Mantendo lógica Real para saúde financeira)
+            let totalCustosFixos = despFixas + custoFolhaBase;
+            // Margem de contribuição aproximada usando a alíquota efetiva do simples
+            let margemContribuicaoPct = (margemBrutaPct / 100) - dadosSimples.aliquota;
+            let pontoEquilibrio = margemContribuicaoPct > 0 ? totalCustosFixos / margemContribuicaoPct : fatReal * 10;
+
+            // UI Updates - PE
+            document.getElementById('valPontoEquilibrio').innerText = formatCurrency(pontoEquilibrio);
+            let percentualPE = fatReal > 0 ? (fatReal / pontoEquilibrio) * 100 : 0;
+            let bar = document.getElementById('progressBarPE');
+            let statusPE = document.getElementById('statusPE');
+            document.getElementById('percPE').innerText = percentualPE.toFixed(0) + "% da meta";
+
+            if (percentualPE >= 100) {
+                bar.style.width = '100%';
+                bar.className = 'progress-bar bg-teal-500';
+                statusPE.innerText = "Zona de Lucro";
+                statusPE.className = "text-teal-700 font-bold";
+            } else {
+                bar.style.width = Math.min(percentualPE, 100) + '%';
+                bar.className = 'progress-bar bg-orange-400';
+                statusPE.innerText = "Abaixo do Ponto de Equilíbrio";
+                statusPE.className = "text-orange-600 font-bold";
+            }
+
+            // UI Updates - Valores
+            document.getElementById('resSimplesImposto').innerText = formatCurrency(impostoSimples);
+            document.getElementById('resSimplesAliq').innerText = (dadosSimples.aliquota * 100).toFixed(2) + '%';
+            document.getElementById('resSimplesLucro').innerText = formatCurrency(lucroSimples);
+            document.getElementById('resSimplesMargem').innerText = margemSimples.toFixed(1) + '%';
+
+            document.getElementById('resPresumidoImposto').innerText = formatCurrency(totalImpostosPresumido);
+            document.getElementById('resPresumidoCPP').innerText = formatCurrency(custoPatronal);
+            document.getElementById('resPresumidoLucro').innerText = formatCurrency(lucroPresumido);
+            document.getElementById('resPresumidoMargem').innerText = margemPresumido.toFixed(1) + '%';
+
+            // Detalhes Presumido
+            document.getElementById('detPisCofins').innerText = formatCurrency(pisCofins);
+            document.getElementById('detIrCsll').innerText = formatCurrency(irpj + csll);
+            document.getElementById('detIcms').innerText = formatCurrency(icms);
+            document.getElementById('detInssPatronal').innerText = formatCurrency(custoPatronal);
+
+            // Recomendação
+            let diferenca = lucroSimples - lucroPresumido;
+            const recBox = document.getElementById('recomendacaoBox');
+            const recTitle = document.getElementById('recomendacaoTitulo');
+            const recText = document.getElementById('recomendacaoTexto');
+
+            if (lucroSimples > lucroPresumido) {
+                recBox.className = "p-4 mb-6 rounded-lg text-center border-2 border-green-500 bg-green-50 text-green-900";
+                recTitle.innerText = "🏆 Vencedor: Simples Nacional";
+                recText.innerHTML = `Sua empresa economiza <strong>${formatCurrency(diferenca)}</strong> por mês neste regime.`;
+            } else {
+                recBox.className = "p-4 mb-6 rounded-lg text-center border-2 border-orange-500 bg-orange-50 text-orange-900";
+                recTitle.innerText = "🏆 Vencedor: Lucro Presumido";
+                recText.innerHTML = `Vale a pena migrar! Economia estimada de <strong>${formatCurrency(Math.abs(diferenca))}</strong>.`;
+            }
+
+            // Chart
+            if(chartInstance) chartInstance.destroy();
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: ['Simples Nacional', 'Lucro Presumido'], datasets: [{ label: 'Lucro Líquido (R$)', data: [lucroSimples, lucroPresumido], backgroundColor: ['#22c55e', '#f97316'], borderRadius: 5 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { display: false } }, x: { grid: { display: false } } } }
+            });
+
+            // Ponto de Virada Loop (Baseado no fiscal para determinar mudança de alíquota)
+            let pontoVirada = 0; let achou = false;
+            for (let f = 50000; f <= 800000; f += 5000) {
+                let rbt = f * 12; 
+                // Simulando que f é o valor declarado e real são iguais para a projeção
+                let impS = getSimplesTax(rbt, f).valor;
+                let lucS = f - (f*(1-margemBrutaPct/100)) - despFixas - custoFolhaBase - impS;
+                let impP = (f * 0.0365) + (f * 0.08 * 0.15) + (f * 0.12 * 0.09) + (f * icmsPresumidoAliq);
+                if ((f*0.08) > 20000) impP += ((f*0.08)-20000)*0.10;
+                let lucP = f - (f*(1-margemBrutaPct/100)) - despFixas - custoFolhaBase - custoPatronal - impP;
+                if (lucP > lucS) { pontoVirada = f; achou = true; break; }
+            }
+            document.getElementById('pontoViradaVal').innerText = achou ? formatCurrency(pontoVirada) + "/mês" : "Acima de 800k";
+        }
+
+        // ----- RELATÓRIO DETALHADO PDF -----
+        function gerarRelatorioDetalhado() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Cores
+            const corAzul = [30, 64, 175]; // Blue 800
+            const corCinza = [75, 85, 99]; // Gray 600
+            const corPreto = [17, 24, 39]; // Gray 900
+            
+            let y = 20; // Cursor vertical
+
+            // Captura dados atuais
+            const fatRealInput = parseFloat(document.getElementById('faturamentoMensal').value) || 0;
+            const fatDeclInput = parseFloat(document.getElementById('faturamentoDeclarado').value) || 0;
+            const modoCalculo = document.querySelector('input[name="baseCalculo"]:checked').value;
+            // Para o relatório, mostramos o Real como base do cenário, mas indicamos o declarado se diferente
+            const fatDisplay = fatRealInput;
+
+            const func = document.getElementById('numFuncionarios').value;
+            const simplesVal = document.getElementById('resSimplesImposto').innerText;
+            const presumidoVal = document.getElementById('resPresumidoImposto').innerText;
+            const custoPatronal = document.getElementById('resPresumidoCPP').innerText;
+            const winner = document.getElementById('recomendacaoTitulo').innerText.replace("🏆 Vencedor: ", "");
+
+            // CABEÇALHO
+            doc.setFillColor(...corAzul);
+            doc.rect(0, 0, 210, 40, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(22);
+            doc.setFont("helvetica", "bold");
+            doc.text("Relatório de Estratégia Tributária", 15, 20);
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+            doc.text("Análise Simplificada: Varejo e Comércio", 15, 28);
+            doc.setFontSize(10);
+            doc.text(`Data da simulação: ${new Date().toLocaleDateString()}`, 15, 35);
+
+            y = 50;
+
+            // 1. CENÁRIO ATUAL
+            doc.setTextColor(...corAzul);
+            doc.setFontSize(14);
+            doc.setFont("helvetica", "bold");
+            doc.text("1. Seu Cenário Simulado", 15, y);
+            y += 8;
+
+            doc.setTextColor(...corPreto);
+            doc.setFontSize(11);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Faturamento Real: R$ ${fatRealInput.toLocaleString('pt-BR')}`, 15, y);
+            
+            if (modoCalculo === 'declarado') {
+                doc.text(`(Base de Impostos Declarada: R$ ${fatDeclInput.toLocaleString('pt-BR')})`, 110, y);
+            }
+            y += 6;
+            
+            doc.text(`Equipe: ${func} funcionário(s)`, 15, y);
+            y += 10;
+
+            // 2. RESULTADO COMPARATIVO
+            doc.setFillColor(240, 240, 240);
+            doc.rect(15, y, 180, 35, 'F'); // Box cinza
+            y += 8;
+            
+            doc.setFont("helvetica", "bold");
+            doc.text(`Melhor Regime para você hoje: ${winner}`, 20, y);
+            y += 8;
+            
+            doc.setFont("helvetica", "normal");
+            doc.text(`Custo no Simples Nacional: ${simplesVal} (Guia Única)`, 20, y);
+            y += 6;
+            doc.text(`Custo no Lucro Presumido: ${presumidoVal} (Várias Guias) + ${custoPatronal} (INSS Extra)`, 20, y);
+            y += 20;
+
+            // 3. EXPLICAÇÃO DIDÁTICA (O que significa?)
+            doc.setTextColor(...corAzul);
+            doc.setFontSize(14);
+            doc.setFont("helvetica", "bold");
+            doc.text("2. Entendendo a Diferença (Sem Contabilês)", 15, y);
+            y += 8;
+
+            doc.setTextColor(...corCinza);
+            doc.setFontSize(10);
+            const textSimples = "O Simples Nacional funciona como um 'Combo' de fast-food. Você paga um valor único (DAS) e ali dentro já estão inclusos 8 impostos diferentes, inclusive o INSS da parte da empresa sobre os funcionários. Por isso, para quem tem folha de pagamento, costuma ser mais barato.";
+            const linesSimples = doc.splitTextToSize(textSimples, 180);
+            doc.text(linesSimples, 15, y);
+            y += (linesSimples.length * 5) + 4;
+
+            const textPresumido = "O Lucro Presumido é 'à la carte'. Você paga cada imposto separadamente. O grande vilão aqui é a Folha de Pagamento: além do salário, você paga +20% de INSS Patronal para o governo, coisa que no Simples é isento.";
+            const linesPresumido = doc.splitTextToSize(textPresumido, 180);
+            doc.text(linesPresumido, 15, y);
+            y += (linesPresumido.length * 5) + 10;
+
+            // 4. EXEMPLO PRÁTICO: CUSTO DE FUNCIONÁRIO
+            doc.setTextColor(...corAzul);
+            doc.setFontSize(14);
+            doc.setFont("helvetica", "bold");
+            doc.text("3. Exemplo Prático: Quanto custa um funcionário?", 15, y);
+            y += 8;
+
+            doc.setTextColor(...corCinza);
+            doc.setFont("helvetica", "normal");
+            doc.text("Imagine que você contrate alguém por R$ 2.000,00 na carteira. Veja a realidade:", 15, y);
+            y += 8;
+
+            // Tabela simples desenhada
+            doc.setDrawColor(200);
+            doc.line(15, y, 150, y); 
+            y += 5;
+            doc.setFont("helvetica", "bold");
+            doc.text("Item", 15, y); doc.text("Valor Aprox.", 100, y);
+            y += 3;
+            doc.line(15, y, 150, y);
+            y += 6;
+
+            doc.setFont("helvetica", "normal");
+            doc.text("Salário na Carteira", 15, y); doc.text("R$ 2.000,00", 100, y); y += 6;
+            doc.text("FGTS (8% - Pago todo mês)", 15, y); doc.text("R$ 160,00", 100, y); y += 6;
+            doc.text("Provisão de Férias + 1/3 (Guardar)", 15, y); doc.text("R$ 222,00", 100, y); y += 6;
+            doc.text("Provisão de 13º Salário (Guardar)", 15, y); doc.text("R$ 166,00", 100, y); y += 6;
+            
+            doc.setFont("helvetica", "bold");
+            doc.text("CUSTO REAL MENSAL (Simples)", 15, y); doc.text("R$ 2.548,00", 100, y); y += 8;
+            
+            doc.setTextColor(220, 38, 38); // Vermelho
+            doc.text("CUSTO REAL (Lucro Presumido)", 15, y); doc.text("R$ 3.108,00 (+ INSS 28%)", 100, y); 
+            
+            doc.setTextColor(...corCinza);
+            y += 15;
+
+            // 5. CUSTOS OCULTOS
+            doc.setTextColor(...corAzul);
+            doc.setFontSize(14);
+            doc.text("4. Custos Ocultos (Fora da Guia de Imposto)", 15, y);
+            y += 8;
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            
+            const hiddenCosts = [
+                "• Certificado Digital (e-CNPJ): Obrigatório para emitir nota (~R$ 200/ano).",
+                "• Alvará e Taxas: Prefeitura e Bombeiros cobram taxas anuais.",
+                "• ICMS na Compra: Se comprar de fora do estado, pode vir cobrança de DIFAL."
+            ];
+            
+            hiddenCosts.forEach(item => {
+                doc.text(item, 15, y);
+                y += 6;
+            });
+
+            // RODAPÉ
+            y = 280; // Final da página A4
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.text("Este relatório é uma simulação educativa e não substitui a contabilidade oficial.", 105, y, { align: "center" });
+
+            // Salvar
+            doc.save("Relatorio_Consultoria_Tributaria.pdf");
+        }
+
+        // ----- AUXILIARES UI -----
+        function switchTab(t) {
+            ['calc', 'extras'].forEach(x => {
+                document.getElementById('tab-'+x).style.display = (x===t ? 'block':'none');
+                document.getElementById('btn-'+x).className = (x===t ? 'tab-btn active whitespace-nowrap' : 'tab-btn whitespace-nowrap');
+            });
+        }
+        function toggleTooltip(e, id) {
+            e.stopPropagation();
+            document.querySelectorAll('.tooltip-content').forEach(t => t.style.display = 'none');
+            const el = document.getElementById(id);
+            el.style.display = (el.style.display === 'block' ? 'none' : 'block');
+        }
+        function closeAllTooltips() { document.querySelectorAll('.tooltip-content').forEach(t => t.style.display = 'none'); }
+
+        window.onload = calcular;
+    </script>
+</body>
+</html>
